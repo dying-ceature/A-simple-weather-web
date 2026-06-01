@@ -11,6 +11,7 @@ import {
   searchCity as apiSearchCity,
   getNowWeather,
   get7dForecast,
+  getHourlyForecast,
 } from '@/api/weather.js'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,9 @@ const currentWeather = ref(null)
 
 /** 7 天预报数据 */
 const forecast = ref([])
+
+/** 24 小时逐时预报数据 */
+const hourlyForecast = ref([])
 
 /** 是否正在请求中 */
 const loading = ref(false)
@@ -120,14 +124,16 @@ export function useWeather() {
       cityInfo.value = city
       saveLastCity(trimmed)
 
-      // 2. 并行请求实时天气 + 7 天预报（节省时间）
-      const [nowData, dailyData] = await Promise.all([
+      // 2. 并行请求实时天气 + 7 天预报 + 24 小时预报（节省时间）
+      const [nowData, dailyData, hourlyData] = await Promise.all([
         getNowWeather(city.id),
         get7dForecast(city.id),
+        getHourlyForecast(city.id),
       ])
 
       currentWeather.value = nowData
       forecast.value = dailyData
+      hourlyForecast.value = hourlyData
     } catch (err) {
       error.value = normalizeError(err)
       // 发生错误时不清空已有数据，让用户仍能看到上次成功的查询结果
@@ -152,6 +158,7 @@ export function useWeather() {
     cityInfo,
     currentWeather,
     forecast,
+    hourlyForecast,
     loading,
     error,
     initialized,

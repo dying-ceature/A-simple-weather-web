@@ -198,6 +198,41 @@ export async function get7dForecast(locationId) {
 }
 
 /**
+ * 获取指定城市 24 小时逐小时天气预报
+ *
+ * 接口：/v7/weather/168h
+ *
+ * @param {string} locationId - 城市 locationId
+ * @returns {Promise<Array<{
+ *   fxTime: string,
+ *   temp: string,
+ *   text: string,
+ *   icon: string,
+ *   windDir: string,
+ *   windScale: string,
+ * }>>}
+ */
+export async function getHourlyForecast(locationId) {
+  const { data } = await client.get('/v7/weather/168h', {
+    params: { location: locationId },
+  })
+
+  if (!isOk(data)) {
+    throw new Error(apiErrorMessage(data.code))
+  }
+
+  const hourly = data.hourly || []
+  return hourly.map((h) => ({
+    fxTime: h.fxTime || '',
+    temp: h.temp ?? '--',
+    text: h.text ?? '--',
+    icon: h.icon ?? '100',
+    windDir: h.windDir ?? '--',
+    windScale: h.windScale ?? '--',
+  }))
+}
+
+/**
  * 获取天气图标 CDN 地址
  * @param {string} iconCode - 图标代码，如 "100"、"305"
  * @returns {string} 完整的图标 URL

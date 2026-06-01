@@ -67,7 +67,9 @@ const chartOption = computed(() => {
     },
     legend: {
       data: ['最高温', '最低温'],
-      bottom: 0,
+      top: 0,
+      right: 0,
+      orient: 'horizontal',
       textStyle: {
         color: textColor,
         fontSize: 12,
@@ -76,8 +78,8 @@ const chartOption = computed(() => {
     grid: {
       left: 40,
       right: 20,
-      top: 20,
-      bottom: 36,
+      top: 36,
+      bottom: 20,
     },
     xAxis: {
       type: 'category',

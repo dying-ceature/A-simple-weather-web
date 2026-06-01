@@ -12,12 +12,14 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorMessage from '@/components/ErrorMessage.vue'
 import CurrentWeather from '@/components/CurrentWeather.vue'
 import ForecastList from '@/components/ForecastList.vue'
+import HourlyChart from '@/components/HourlyChart.vue'
 import TemperatureChart from '@/components/TemperatureChart.vue'
 
 const {
   cityInfo,
   currentWeather,
   forecast,
+  hourlyForecast,
   loading,
   error,
   searchCity,
@@ -71,6 +73,9 @@ onMounted(() => {
         :city-info="cityInfo"
         :now-data="currentWeather"
       />
+
+      <!-- 24 小时温度趋势 -->
+      <HourlyChart :hourly-data="hourlyForecast" />
 
       <!-- 7 天预报 -->
       <ForecastList :daily-data="forecast" />
