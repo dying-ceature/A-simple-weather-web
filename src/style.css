@@ -1,0 +1,229 @@
+/* =========================================================================
+   src/style.css — 全局样式 & CSS 变量主题系统
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   CSS 自定义属性：亮色主题（默认）
+   ------------------------------------------------------------------------- */
+:root {
+  /* 背景 */
+  --color-bg: #f0f4f8;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #ffffff;
+  --color-bg-hover: #f7fafc;
+
+  /* 文字 */
+  --color-text-primary: #1a202c;
+  --color-text-secondary: #4a5568;
+  --color-text-muted: #a0aec0;
+
+  /* 边框 */
+  --color-border: #e2e8f0;
+
+  /* 品牌色 */
+  --color-primary: #3182ce;
+  --color-primary-hover: #2b6cb0;
+  --color-primary-text: #ffffff;
+
+  /* 强调色 — 温度等 */
+  --color-temp-high: #e53e3e;
+  --color-temp-low: #3182ce;
+
+  /* 阴影 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 过渡 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+/* -------------------------------------------------------------------------
+   CSS 自定义属性：暗色主题
+   ------------------------------------------------------------------------- */
+[data-theme='dark'] {
+  --color-bg: #1a202c;
+  --color-bg-card: #2d3748;
+  --color-bg-input: #2d3748;
+  --color-bg-hover: #4a5568;
+
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #cbd5e0;
+  --color-text-muted: #718096;
+
+  --color-border: #4a5568;
+
+  --color-primary: #63b3ed;
+  --color-primary-hover: #4299e1;
+  --color-primary-text: #1a202c;
+
+  --color-temp-high: #fc8181;
+  --color-temp-low: #63b3ed;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 4px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* -------------------------------------------------------------------------
+   全局重置 & 基础排版
+   ------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
+    sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+#app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+/* -------------------------------------------------------------------------
+   通用卡片样式
+   ------------------------------------------------------------------------- */
+.card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-card);
+  transition: background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    box-shadow var(--transition-fast);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* -------------------------------------------------------------------------
+   通用按钮样式
+   ------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--transition-fast),
+    opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-text);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+}
+
+.btn-icon:hover {
+  background-color: var(--color-bg-hover);
+}
+
+/* -------------------------------------------------------------------------
+   输入框
+   ------------------------------------------------------------------------- */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--transition-fast),
+    background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.2);
+}
+
+/* -------------------------------------------------------------------------
+   天气图标
+   ------------------------------------------------------------------------- */
+.weather-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.weather-icon--large {
+  width: 72px;
+  height: 72px;
+}
+
+/* -------------------------------------------------------------------------
+   响应式布局
+   ------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  #app {
+    padding: 12px 12px 24px;
+  }
+
+  .card {
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 14px;
+  }
+}
