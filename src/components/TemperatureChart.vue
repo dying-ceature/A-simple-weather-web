@@ -1,39 +1,29 @@
-<!--
-  @file TemperatureChart.vue
-  @description ECharts 温度折线图 — 展示未来 7 天最高温 / 最低温趋势
-  支持暗色 / 亮色主题自适应 & 窗口 resize。
--->
-<script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+<script setup lang="ts">
+/**
+ * TemperatureChart.vue — 7 天最高温/最低温趋势图
+ *
+ * 使用共享 useECharts composable 管理图表生命周期。
+ * 双线面积图，最高温红色、最低温蓝色，带标记点。
+ */
+
+import { computed } from 'vue'
 import * as echarts from 'echarts'
-import { useTheme } from '@/composables/useTheme.js'
-import { formatDateShort, getWeekday } from '@/utils/date.js'
+import { useThemeStore } from '@/stores/theme'
+import { useECharts } from '@/composables/useECharts'
+import { formatDateShort, getWeekday } from '@/utils/date'
+import type { DailyForecast } from '@/types/weather'
 
-const props = defineProps({
-  /** 7 天预报数组 */
-  dailyData: {
-    type: Array,
-    default: () => [],
-  },
-})
+const props = defineProps<{
+  dailyData: DailyForecast[]
+}>()
 
-// ------------------------------------------------------------------
-// 主题
-// ------------------------------------------------------------------
-const { theme } = useTheme()
+const themeStore = useThemeStore()
 
-// ------------------------------------------------------------------
-// 图表容器 ref
-// ------------------------------------------------------------------
-const chartContainer = ref(null)
-let chartInstance = null
-let resizeObserver = null
-
-// ------------------------------------------------------------------
-// 准备 ECharts 数据
-// ------------------------------------------------------------------
-const chartOption = computed(() => {
+/** 构建 ECharts 配置 */
+const chartOption = computed<echarts.EChartsOption | null>(() => {
   const data = props.dailyData || []
+  if (data.length === 0) return null
+
   const xAxisData = data.map((d) => {
     const short = formatDateShort(d.fxDate)
     const wd = getWeekday(d.fxDate)
@@ -42,7 +32,7 @@ const chartOption = computed(() => {
   const maxTemps = data.map((d) => parseFloat(d.tempMax) || 0)
   const minTemps = data.map((d) => parseFloat(d.tempMin) || 0)
 
-  const isDark = theme.value === 'dark'
+  const isDark = themeStore.theme === 'dark'
   const textColor = isDark ? '#cbd5e0' : '#4a5568'
   const axisColor = isDark ? '#4a5568' : '#e2e8f0'
   const splitColor = isDark ? '#2d3748' : '#edf2f7'
@@ -52,14 +42,12 @@ const chartOption = computed(() => {
       trigger: 'axis',
       backgroundColor: isDark ? '#2d3748' : '#fff',
       borderColor: isDark ? '#4a5568' : '#e2e8f0',
-      textStyle: {
-        color: textColor,
-        fontSize: 13,
-      },
-      formatter(params) {
-        const dateStr = data[params[0]?.dataIndex]?.fxDate || ''
+      textStyle: { color: textColor, fontSize: 13 },
+      formatter(params: unknown) {
+        const items = params as { dataIndex: number; marker: string; seriesName: string; value: number }[]
+        const dateStr = data[items[0]?.dataIndex]?.fxDate || ''
         let html = `<strong>${formatDateShort(dateStr)} ${getWeekday(dateStr)}</strong><br/>`
-        params.forEach((p) => {
+        items.forEach((p) => {
           html += `${p.marker} ${p.seriesName}: ${p.value}°C<br/>`
         })
         return html
@@ -70,10 +58,7 @@ const chartOption = computed(() => {
       top: 0,
       right: 0,
       orient: 'horizontal',
-      textStyle: {
-        color: textColor,
-        fontSize: 12,
-      },
+      textStyle: { color: textColor, fontSize: 12 },
     },
     grid: {
       left: 40,
@@ -102,9 +87,7 @@ const chartOption = computed(() => {
         fontSize: 11,
         formatter: '{value}°',
       },
-      splitLine: {
-        lineStyle: { color: splitColor },
-      },
+      splitLine: { lineStyle: { color: splitColor } },
     },
     series: [
       {
@@ -123,9 +106,7 @@ const chartOption = computed(() => {
           ]),
         },
         markPoint: {
-          data: [
-            { type: 'max', name: '最高' },
-          ],
+          data: [{ type: 'max', name: '最高' }],
           label: { fontSize: 10 },
         },
       },
@@ -145,9 +126,7 @@ const chartOption = computed(() => {
           ]),
         },
         markPoint: {
-          data: [
-            { type: 'min', name: '最低' },
-          ],
+          data: [{ type: 'min', name: '最低' }],
           label: { fontSize: 10 },
         },
       },
@@ -155,62 +134,16 @@ const chartOption = computed(() => {
   }
 })
 
-// ------------------------------------------------------------------
-// 初始化 / 更新图表
-// ------------------------------------------------------------------
-function initChart() {
-  if (!chartContainer.value) return
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartContainer.value)
-  }
-
-  chartInstance.setOption(chartOption.value, { notMerge: true })
-}
-
-function disposeChart() {
-  if (chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
-  }
-}
-
-// 当数据或主题变化时更新图表
-watch(
-  [() => props.dailyData, theme],
-  () => {
-    initChart()
-  },
-  { deep: true }
-)
-
-// ------------------------------------------------------------------
-// 生命周期
-// ------------------------------------------------------------------
-onMounted(() => {
-  initChart()
-
-  // 监听容器尺寸变化 → 自动 resize
-  if (chartContainer.value) {
-    resizeObserver = new ResizeObserver(() => {
-      chartInstance?.resize()
-    })
-    resizeObserver.observe(chartContainer.value)
-  }
-})
-
-onUnmounted(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  disposeChart()
-})
+const { chartContainer } = useECharts(() => chartOption.value)
 </script>
 
 <template>
-  <div class="chart-section card">
-    <h3 class="section-title">温度趋势</h3>
-    <div ref="chartContainer" class="chart-container"></div>
-  </div>
+  <el-card class="chart-section" shadow="hover">
+    <template #header>
+      <h3 class="section-title">温度趋势</h3>
+    </template>
+    <div ref="chartContainer" class="chart-container" />
+  </el-card>
 </template>
 
 <style scoped>
@@ -221,7 +154,6 @@ onUnmounted(() => {
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 14px;
   color: var(--color-text-primary);
 }
 

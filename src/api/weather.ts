@@ -1,5 +1,5 @@
 /**
- * @file src/api/weather.js
+ * @file src/api/weather.ts
  * @description 和风天气（QWeather）API 封装层
  *
  * 接口文档：https://dev.qweather.com/docs/api/
@@ -13,24 +13,30 @@
  *   城市搜索： /geo/v2/city/lookup
  *   实时天气： /v7/weather/now
  *   7 天预报： /v7/weather/7d
+ *   168h 逐时：/v7/weather/168h
  */
 
 import axios from 'axios'
+import type { CityInfo, CurrentWeather, DailyForecast, HourlyForecast, CitySearchResult } from '@/types/weather'
+
+// =============================================================================
+// 配置
+// =============================================================================
 
 /** 和风天气 API Key */
-const API_KEY = import.meta.env.VITE_QWEATHER_KEY
+const API_KEY: string = import.meta.env.VITE_QWEATHER_KEY
 
 /**
  * API Host — 所有服务（Geo + Weather）共用同一个 Host。
  * 付费用户请在控制台-设置中查看你的专属 Host。
  */
-const API_HOST = import.meta.env.VITE_QWEATHER_HOST || 'devapi.qweather.com'
+const API_HOST: string = import.meta.env.VITE_QWEATHER_HOST || 'devapi.qweather.com'
 
 const BASE_URL = `https://${API_HOST}`
 
-// ---------------------------------------------------------------------------
+// =============================================================================
 // Axios 实例
-// ---------------------------------------------------------------------------
+// =============================================================================
 
 /** 统一的 Axios 实例，所有 API 共用同一个 Host + 认证头 */
 const client = axios.create({
@@ -39,18 +45,27 @@ const client = axios.create({
   headers: { 'X-QW-Api-Key': API_KEY },
 })
 
-// ---------------------------------------------------------------------------
+// =============================================================================
 // 内部工具
-// ---------------------------------------------------------------------------
+// =============================================================================
+
+interface ApiResponse {
+  code: string
+  location?: unknown[]
+  now?: Record<string, string>
+  daily?: Record<string, string>[]
+  hourly?: Record<string, string>[]
+  updateTime?: string
+}
 
 /** 判断和风天气响应是否成功 */
-function isOk(responseData) {
+function isOk(responseData: ApiResponse): boolean {
   return responseData && responseData.code === '200'
 }
 
 /** 错误码 → 中文消息 */
-function apiErrorMessage(code) {
-  const map = {
+function apiErrorMessage(code: string): string {
+  const map: Record<string, string> = {
     '204': '请求成功，但该地区没有你需要的数据',
     '400': '请求错误 — 可能缺少必要参数',
     '401': 'API Key 错误或未激活',
@@ -63,25 +78,30 @@ function apiErrorMessage(code) {
   return map[code] || `API 请求失败 (错误码: ${code})`
 }
 
-// ---------------------------------------------------------------------------
+// =============================================================================
 // 公开 API
-// ---------------------------------------------------------------------------
+// =============================================================================
 
 /**
- * 根据城市名称搜索城市信息（获取 locationId）
- *
+ * 根据城市名称搜索城市信息（获取 locationId）。
  * 接口：/geo/v2/city/lookup
  *
- * @param {string} keyword - 城市名称，例如 "北京"、"上海"
- * @returns {Promise<{ id: string, name: string, adm1: string, adm2: string, country: string, lat: string, lon: string }>}
+ * @param keyword - 城市名称，例如 "北京"、"上海"
+ * @param returnAll - 是否返回全部搜索结果（默认 false，仅返回第一个）
+ * @returns 城市信息（单个或数组）
  * @throws {Error} 当城市不存在或 API 请求失败时抛出
  */
-export async function searchCity(keyword) {
+export async function searchCity(keyword: string, returnAll?: false): Promise<CityInfo>
+export async function searchCity(keyword: string, returnAll: true): Promise<CitySearchResult[]>
+export async function searchCity(
+  keyword: string,
+  returnAll = false
+): Promise<CityInfo | CitySearchResult[]> {
   if (!keyword || !keyword.trim()) {
     throw new Error('请输入城市名称')
   }
 
-  const { data } = await client.get('/geo/v2/city/lookup', {
+  const { data } = await client.get<ApiResponse>('/geo/v2/city/lookup', {
     params: {
       location: keyword.trim(),
       number: 10,
@@ -92,44 +112,43 @@ export async function searchCity(keyword) {
     throw new Error(apiErrorMessage(data.code))
   }
 
-  const locations = data.location || []
+  const locations = (data.location || []) as Record<string, string>[]
   if (locations.length === 0) {
     throw new Error(`未找到城市 "${keyword}"，请检查城市名称是否正确`)
   }
 
+  if (returnAll) {
+    return locations.map((city) => ({
+      id: city.id || '',
+      name: city.name || '',
+      adm1: city.adm1 || '',
+      adm2: city.adm2 || '',
+      country: city.country || '',
+      lat: city.lat || '',
+      lon: city.lon || '',
+    })) as CitySearchResult[]
+  }
+
   const city = locations[0]
   return {
-    id: city.id,
-    name: city.name,
+    id: city.id || '',
+    name: city.name || '',
     adm1: city.adm1 || '',
     adm2: city.adm2 || '',
     country: city.country || '',
     lat: city.lat || '',
     lon: city.lon || '',
-  }
+  } as CityInfo
 }
 
 /**
- * 获取指定城市的实时天气
- *
+ * 获取指定城市的实时天气。
  * 接口：/v7/weather/now
  *
- * @param {string} locationId - 城市 locationId（来自 searchCity）
- * @returns {Promise<{
- *   temp: string,
- *   feelsLike: string,
- *   text: string,
- *   icon: string,
- *   windDir: string,
- *   windScale: string,
- *   humidity: string,
- *   pressure: string,
- *   vis: string,
- *   updateTime: string,
- * }>}
+ * @param locationId - 城市 locationId（来自 searchCity）
  */
-export async function getNowWeather(locationId) {
-  const { data } = await client.get('/v7/weather/now', {
+export async function getNowWeather(locationId: string): Promise<CurrentWeather> {
+  const { data } = await client.get<ApiResponse>('/v7/weather/now', {
     params: { location: locationId },
   })
 
@@ -153,27 +172,13 @@ export async function getNowWeather(locationId) {
 }
 
 /**
- * 获取指定城市未来 7 天天气预报
- *
+ * 获取指定城市未来 7 天天气预报。
  * 接口：/v7/weather/7d
  *
- * @param {string} locationId - 城市 locationId
- * @returns {Promise<Array<{
- *   fxDate: string,
- *   tempMax: string,
- *   tempMin: string,
- *   textDay: string,
- *   textNight: string,
- *   iconDay: string,
- *   iconNight: string,
- *   windDirDay: string,
- *   windScaleDay: string,
- *   windDirNight: string,
- *   windScaleNight: string,
- * }>>}
+ * @param locationId - 城市 locationId
  */
-export async function get7dForecast(locationId) {
-  const { data } = await client.get('/v7/weather/7d', {
+export async function get7dForecast(locationId: string): Promise<DailyForecast[]> {
+  const { data } = await client.get<ApiResponse>('/v7/weather/7d', {
     params: { location: locationId },
   })
 
@@ -182,7 +187,7 @@ export async function get7dForecast(locationId) {
   }
 
   const daily = data.daily || []
-  return daily.map((d) => ({
+  return daily.map((d: Record<string, string>) => ({
     fxDate: d.fxDate || '',
     tempMax: d.tempMax ?? '--',
     tempMin: d.tempMin ?? '--',
@@ -194,26 +199,17 @@ export async function get7dForecast(locationId) {
     windScaleDay: d.windScaleDay ?? '--',
     windDirNight: d.windDirNight ?? '--',
     windScaleNight: d.windScaleNight ?? '--',
-  }))
+  })) as DailyForecast[]
 }
 
 /**
- * 获取指定城市 24 小时逐小时天气预报
- *
+ * 获取指定城市逐小时天气预报（168 小时）。
  * 接口：/v7/weather/168h
  *
- * @param {string} locationId - 城市 locationId
- * @returns {Promise<Array<{
- *   fxTime: string,
- *   temp: string,
- *   text: string,
- *   icon: string,
- *   windDir: string,
- *   windScale: string,
- * }>>}
+ * @param locationId - 城市 locationId
  */
-export async function getHourlyForecast(locationId) {
-  const { data } = await client.get('/v7/weather/168h', {
+export async function getHourlyForecast(locationId: string): Promise<HourlyForecast[]> {
+  const { data } = await client.get<ApiResponse>('/v7/weather/168h', {
     params: { location: locationId },
   })
 
@@ -222,21 +218,21 @@ export async function getHourlyForecast(locationId) {
   }
 
   const hourly = data.hourly || []
-  return hourly.map((h) => ({
+  return hourly.map((h: Record<string, string>) => ({
     fxTime: h.fxTime || '',
     temp: h.temp ?? '--',
     text: h.text ?? '--',
     icon: h.icon ?? '100',
     windDir: h.windDir ?? '--',
     windScale: h.windScale ?? '--',
-  }))
+  })) as HourlyForecast[]
 }
 
 /**
- * 获取天气图标 CDN 地址
- * @param {string} iconCode - 图标代码，如 "100"、"305"
- * @returns {string} 完整的图标 URL
+ * 获取天气图标 CDN 地址。
+ * @param iconCode - 图标代码，如 "100"、"305"
+ * @returns 完整的图标 URL
  */
-export function getWeatherIconUrl(iconCode) {
+export function getWeatherIconUrl(iconCode: string): string {
   return `https://icons.qweather.com/assets/icons/${iconCode}.svg`
 }

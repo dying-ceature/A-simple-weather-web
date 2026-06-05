@@ -41,6 +41,34 @@
   /* 过渡 */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
+
+  /* =====================================================================
+     Element Plus CSS 变量映射（亮色主题）
+     确保 Element Plus 组件跟随应用主题变化
+     ===================================================================== */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: #63b3ed;
+  --el-color-primary-light-5: #90cdf4;
+  --el-color-primary-light-7: #bee3f8;
+  --el-color-primary-light-8: #d6edfb;
+  --el-color-primary-light-9: #ebf5fd;
+  --el-color-primary-dark-2: #2b6cb0;
+  --el-bg-color: var(--color-bg);
+  --el-bg-color-overlay: var(--color-bg-card);
+  --el-bg-color-page: var(--color-bg);
+  --el-text-color-primary: var(--color-text-primary);
+  --el-text-color-regular: var(--color-text-secondary);
+  --el-text-color-secondary: var(--color-text-muted);
+  --el-text-color-placeholder: var(--color-text-muted);
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border);
+  --el-border-color-lighter: var(--color-border);
+  --el-border-radius-base: var(--radius-sm);
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 20px;
+  --el-box-shadow-light: var(--shadow-card);
+  --el-fill-color-blank: var(--color-bg-card);
+  --el-fill-color-light: var(--color-bg-hover);
 }
 
 /* -------------------------------------------------------------------------
@@ -67,6 +95,31 @@
 
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-card-hover: 0 4px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  /* =====================================================================
+     Element Plus CSS 变量映射（暗色主题）
+     ===================================================================== */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: #4299e1;
+  --el-color-primary-light-5: #2b6cb0;
+  --el-color-primary-light-7: #2c5282;
+  --el-color-primary-light-8: #2a4365;
+  --el-color-primary-light-9: #1a365d;
+  --el-color-primary-dark-2: #90cdf4;
+  --el-bg-color: var(--color-bg);
+  --el-bg-color-overlay: var(--color-bg-card);
+  --el-bg-color-page: var(--color-bg);
+  --el-text-color-primary: var(--color-text-primary);
+  --el-text-color-regular: var(--color-text-secondary);
+  --el-text-color-secondary: var(--color-text-muted);
+  --el-text-color-placeholder: var(--color-text-muted);
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border);
+  --el-border-color-lighter: var(--color-border);
+  --el-border-radius-base: var(--radius-sm);
+  --el-box-shadow-light: var(--shadow-card);
+  --el-fill-color-blank: var(--color-bg-card);
+  --el-fill-color-light: var(--color-bg-hover);
 }
 
 /* -------------------------------------------------------------------------

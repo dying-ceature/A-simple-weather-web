@@ -1,27 +1,23 @@
-<!--
-  @file CurrentWeather.vue
-  @description 实时天气卡片 — 展示当前温度、天气描述、体感、湿度、风等
--->
-<script setup>
-import { computed } from 'vue'
-import { getWeatherIconUrl } from '@/api/weather.js'
-import { formatUpdateTime } from '@/utils/date.js'
+<script setup lang="ts">
+/**
+ * CurrentWeather.vue — 实时天气卡片
+ *
+ * 展示城市名、温度、天气描述、体感温度、湿度、风向、风力、气压、能见度。
+ * 使用 ElCard 替代手写卡片。
+ */
 
-const props = defineProps({
-  /** 城市信息 { name, adm1, country } */
-  cityInfo: {
-    type: Object,
-    default: null,
-  },
-  /** 实时天气数据 */
-  nowData: {
-    type: Object,
-    default: null,
-  },
-})
+import { computed } from 'vue'
+import { getWeatherIconUrl } from '@/api/weather'
+import { formatUpdateTime } from '@/utils/date'
+import type { CityInfo, CurrentWeather } from '@/types/weather'
+
+const props = defineProps<{
+  cityInfo: CityInfo | null
+  nowData: CurrentWeather | null
+}>()
 
 /** 是否有数据可展示 */
-const hasData = computed(() => props.nowData && props.cityInfo)
+const hasData = computed(() => !!(props.nowData && props.cityInfo))
 
 /** 城市显示名称 */
 const cityDisplayName = computed(() => {
@@ -41,7 +37,7 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
 </script>
 
 <template>
-  <div v-if="hasData" class="current-weather card">
+  <el-card v-if="hasData" class="current-weather" shadow="hover">
     <!-- 顶部：城市 + 更新时间 -->
     <div class="cw-header">
       <h2 class="cw-city">{{ cityDisplayName }}</h2>
@@ -51,17 +47,17 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
     <!-- 中部：温度 + 天气描述 + 图标 -->
     <div class="cw-main">
       <div class="cw-temp-block">
-        <span class="cw-temp">{{ nowData.temp }}</span>
+        <span class="cw-temp">{{ nowData!.temp }}</span>
         <span class="cw-temp-unit">°C</span>
       </div>
       <div class="cw-desc-block">
         <img
           v-if="iconUrl"
           :src="iconUrl"
-          :alt="nowData.text"
+          :alt="nowData!.text"
           class="weather-icon weather-icon--large"
         />
-        <span class="cw-text">{{ nowData.text }}</span>
+        <span class="cw-text">{{ nowData!.text }}</span>
       </div>
     </div>
 
@@ -69,30 +65,30 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
     <div class="cw-details">
       <div class="cw-detail-item">
         <span class="cw-detail-label">体感温度</span>
-        <span class="cw-detail-value">{{ nowData.feelsLike }}°C</span>
+        <span class="cw-detail-value">{{ nowData!.feelsLike }}°C</span>
       </div>
       <div class="cw-detail-item">
         <span class="cw-detail-label">湿度</span>
-        <span class="cw-detail-value">{{ nowData.humidity }}%</span>
+        <span class="cw-detail-value">{{ nowData!.humidity }}%</span>
       </div>
       <div class="cw-detail-item">
         <span class="cw-detail-label">风向</span>
-        <span class="cw-detail-value">{{ nowData.windDir }}</span>
+        <span class="cw-detail-value">{{ nowData!.windDir }}</span>
       </div>
       <div class="cw-detail-item">
         <span class="cw-detail-label">风力</span>
-        <span class="cw-detail-value">{{ nowData.windScale }} 级</span>
+        <span class="cw-detail-value">{{ nowData!.windScale }} 级</span>
       </div>
       <div class="cw-detail-item">
         <span class="cw-detail-label">气压</span>
-        <span class="cw-detail-value">{{ nowData.pressure }} hPa</span>
+        <span class="cw-detail-value">{{ nowData!.pressure }} hPa</span>
       </div>
       <div class="cw-detail-item">
         <span class="cw-detail-label">能见度</span>
-        <span class="cw-detail-value">{{ nowData.vis }} km</span>
+        <span class="cw-detail-value">{{ nowData!.vis }} km</span>
       </div>
     </div>
-  </div>
+  </el-card>
 </template>
 
 <style scoped>
@@ -115,6 +111,7 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
   font-size: 20px;
   font-weight: 600;
   color: var(--color-text-primary);
+  margin: 0;
 }
 
 .cw-update {
@@ -122,7 +119,6 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
   color: var(--color-text-muted);
 }
 
-/* 温度 + 描述区域 */
 .cw-main {
   display: flex;
   align-items: center;
@@ -162,7 +158,6 @@ const updateTime = computed(() => formatUpdateTime(props.nowData?.updateTime))
   color: var(--color-text-secondary);
 }
 
-/* 详细指标网格 */
 .cw-details {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

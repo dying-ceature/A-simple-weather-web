@@ -1,23 +1,26 @@
-<!--
-  @file ThemeToggle.vue
-  @description 主题切换按钮 — 亮色 / 暗色模式
--->
-<script setup>
-import { useTheme } from '@/composables/useTheme.js'
+<script setup lang="ts">
+/**
+ * ThemeToggle.vue — 主题切换按钮
+ *
+ * 使用 Element Plus ElButton + 原生 SVG 图标。
+ * 替换原来手写的 <button>。
+ */
 
-const { isDark, toggleTheme } = useTheme()
+import { useThemeStore } from '@/stores/theme'
+
+const themeStore = useThemeStore()
 </script>
 
 <template>
-  <button
-    type="button"
-    class="theme-toggle btn-icon"
-    :title="isDark.value ? '切换亮色模式' : '切换暗色模式'"
-    @click="toggleTheme"
+  <el-button
+    class="theme-toggle-btn"
+    :title="themeStore.isDark ? '切换亮色模式' : '切换暗色模式'"
+    circle
+    @click="themeStore.toggleTheme()"
   >
-    <!-- 太阳图标（亮色模式时显示） -->
+    <!-- 太阳图标（暗色模式时显示，点击后切换到亮色） -->
     <svg
-      v-if="isDark.value"
+      v-if="themeStore.isDark"
       xmlns="http://www.w3.org/2000/svg"
       width="18"
       height="18"
@@ -38,7 +41,7 @@ const { isDark, toggleTheme } = useTheme()
       <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
       <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
     </svg>
-    <!-- 月亮图标（暗色模式时显示） -->
+    <!-- 月亮图标（亮色模式时显示，点击后切换到暗色） -->
     <svg
       v-else
       xmlns="http://www.w3.org/2000/svg"
@@ -53,18 +56,17 @@ const { isDark, toggleTheme } = useTheme()
     >
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </svg>
-  </button>
+  </el-button>
 </template>
 
 <style scoped>
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 50%;
-  flex-shrink: 0;
+.theme-toggle-btn {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: var(--color-border);
+  --el-button-text-color: var(--color-text-primary);
+}
+
+.theme-toggle-btn:hover {
+  --el-button-bg-color: var(--color-bg-hover);
 }
 </style>

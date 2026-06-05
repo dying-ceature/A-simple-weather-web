@@ -1,29 +1,25 @@
-<!--
-  @file HourlyChart.vue
-  @description 7 天逐时温度趋势图（168 小时）
-  默认显示前 24 小时，通过 ECharts dataZoom 滑动查看后续数据
--->
-<script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+<script setup lang="ts">
+/**
+ * HourlyChart.vue — 7 天逐时温度趋势图（168 小时）
+ *
+ * 使用共享 useECharts composable 管理图表生命周期。
+ * 默认显示前 24 小时，通过 ECharts dataZoom 滑块滑动查看后续数据。
+ */
+
+import { computed } from 'vue'
 import * as echarts from 'echarts'
-import { useTheme } from '@/composables/useTheme.js'
+import { useThemeStore } from '@/stores/theme'
+import { useECharts } from '@/composables/useECharts'
+import type { HourlyForecast } from '@/types/weather'
 
-const props = defineProps({
-  /** 逐时预报数组（来自 /v7/weather/168h） */
-  hourlyData: {
-    type: Array,
-    default: () => [],
-  },
-})
+const props = defineProps<{
+  hourlyData: HourlyForecast[]
+}>()
 
-const { theme } = useTheme()
-
-const chartContainer = ref(null)
-let chartInstance = null
-let resizeObserver = null
+const themeStore = useThemeStore()
 
 /** 从 fxTime 格式化横轴标签 "M/D HH:00" */
-function formatLabel(isoString) {
+function formatLabel(isoString: string): string {
   if (!isoString) return '--'
   try {
     const d = new Date(isoString)
@@ -38,8 +34,10 @@ function formatLabel(isoString) {
 }
 
 /** 构建 ECharts 配置 */
-const chartOption = computed(() => {
+const chartOption = computed<echarts.EChartsOption | null>(() => {
   const data = props.hourlyData || []
+  if (data.length === 0) return null
+
   const xLabels = data.map((h) => formatLabel(h.fxTime))
   const temps = data.map((h) => {
     const v = parseFloat(h.temp)
@@ -47,16 +45,14 @@ const chartOption = computed(() => {
   })
 
   const count = data.length
-  // 默认显示窗口：约 24 小时（24 / count * 100%），最少显示全部
   const defaultEnd = count > 0 ? Math.min(100, Math.round((24 / count) * 100)) : 100
 
-  const isDark = theme.value === 'dark'
+  const isDark = themeStore.theme === 'dark'
   const textColor = isDark ? '#cbd5e0' : '#4a5568'
   const axisColor = isDark ? '#4a5568' : '#e2e8f0'
   const splitColor = isDark ? '#2d3748' : '#edf2f7'
   const lineColor = '#f6ad55'
 
-  // 横轴标签间隔：总数多时隔得远一些
   const labelInterval = count > 100 ? 12 : count > 48 ? 6 : 3
 
   return {
@@ -65,8 +61,8 @@ const chartOption = computed(() => {
       backgroundColor: isDark ? '#2d3748' : '#fff',
       borderColor: isDark ? '#4a5568' : '#e2e8f0',
       textStyle: { color: textColor, fontSize: 13 },
-      formatter(params) {
-        const p = params[0]
+      formatter(params: unknown) {
+        const p = (params as { dataIndex: number; marker: string }[])[0]
         if (!p) return ''
         const idx = p.dataIndex
         const val = temps[idx]
@@ -80,7 +76,7 @@ const chartOption = computed(() => {
       left: 44,
       right: 24,
       top: 16,
-      bottom: 56,  // 为底部 slider 留空间
+      bottom: 56,
     },
     xAxis: {
       type: 'category',
@@ -106,7 +102,6 @@ const chartOption = computed(() => {
       splitLine: { lineStyle: { color: splitColor } },
     },
     dataZoom: [
-      // 底部滑动条
       {
         type: 'slider',
         start: 0,
@@ -120,12 +115,11 @@ const chartOption = computed(() => {
         textStyle: { color: textColor, fontSize: 10 },
         moveHandleSize: 6,
       },
-      // 鼠标/触摸手势控制
       {
         type: 'inside',
         start: 0,
         end: defaultEnd,
-        zoomOnMouseWheel: false,   // 滚轮平移
+        zoomOnMouseWheel: false,
         moveOnMouseWheel: true,
         moveOnMouseMove: false,
       },
@@ -137,7 +131,7 @@ const chartOption = computed(() => {
         data: temps,
         connectNulls: true,
         smooth: true,
-        symbol: 'none',           // 数据点多时不显示 symbol 避免遮挡
+        symbol: 'none',
         lineStyle: { color: lineColor, width: 2 },
         itemStyle: { color: lineColor },
         areaStyle: {
@@ -151,47 +145,16 @@ const chartOption = computed(() => {
   }
 })
 
-function initChart() {
-  if (!chartContainer.value) return
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartContainer.value)
-  }
-  chartInstance.setOption(chartOption.value, { notMerge: true })
-}
-
-function disposeChart() {
-  if (chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
-  }
-}
-
-watch(
-  [() => props.hourlyData, theme],
-  () => initChart(),
-  { deep: true }
-)
-
-onMounted(() => {
-  initChart()
-  if (chartContainer.value) {
-    resizeObserver = new ResizeObserver(() => chartInstance?.resize())
-    resizeObserver.observe(chartContainer.value)
-  }
-})
-
-onUnmounted(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  disposeChart()
-})
+const { chartContainer } = useECharts(() => chartOption.value)
 </script>
 
 <template>
-  <div v-if="hourlyData.length > 0" class="chart-section card">
-    <h3 class="section-title">7 天逐时温度趋势</h3>
-    <div ref="chartContainer" class="chart-container"></div>
-  </div>
+  <el-card v-if="hourlyData.length > 0" class="chart-section" shadow="hover">
+    <template #header>
+      <h3 class="section-title">7 天逐时温度趋势</h3>
+    </template>
+    <div ref="chartContainer" class="chart-container" />
+  </el-card>
 </template>
 
 <style scoped>
@@ -202,7 +165,6 @@ onUnmounted(() => {
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 14px;
   color: var(--color-text-primary);
 }
 
