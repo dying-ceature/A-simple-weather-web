@@ -5,6 +5,7 @@ import {
   isToday,
   formatUpdateTime,
   formatDateShort,
+  formatWarningTime,
 } from '@/utils/date'
 
 describe('formatDate', () => {
@@ -71,3 +72,16 @@ describe('formatDateShort', () => {
   })
 })
 
+describe('formatWarningTime', () => {
+  it('formats ISO string to MM/DD HH:mm', () => {
+    expect(formatWarningTime('2026-06-05T14:30:00+08:00')).toBe('6/5 14:30')
+    expect(formatWarningTime('2026-12-25T08:00:00+08:00')).toBe('12/25 08:00')
+  })
+
+  it('returns -- for invalid/null input', () => {
+    expect(formatWarningTime(null)).toBe('--')
+    expect(formatWarningTime(undefined)).toBe('--')
+    expect(formatWarningTime('')).toBe('--')
+    expect(formatWarningTime('not-a-date')).toBe('--')
+  })
+})

@@ -61,3 +61,21 @@ export function formatDateShort(dateStr: string | null | undefined): string {
   return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`
 }
 
+/**
+ * 格式化预警时间（ISO8601 → MM/DD HH:mm）。
+ * @example "2026-06-05T14:30+08:00" → "6/5 14:30"
+ */
+export function formatWarningTime(isoStr: string | null | undefined): string {
+  if (!isoStr) return '--'
+  try {
+    const d = new Date(isoStr)
+    if (isNaN(d.getTime())) return '--'
+    const M = d.getMonth() + 1
+    const D = d.getDate()
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${M}/${D} ${hh}:${mm}`
+  } catch {
+    return '--'
+  }
+}

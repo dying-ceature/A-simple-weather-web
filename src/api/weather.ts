@@ -19,7 +19,7 @@
 import axios from 'axios'
 import type {
   CityInfo, CurrentWeather, DailyForecast, HourlyForecast, CitySearchResult,
-  LifeIndex, AirQualityData, MinutelyPrecipitation, TopCity,
+  WeatherWarning, LifeIndex, AirQualityData, MinutelyPrecipitation, TopCity,
 } from '@/types/weather'
 
 // =============================================================================
@@ -239,6 +239,63 @@ export async function getHourlyForecast(locationId: string): Promise<HourlyForec
     windDir: h.windDir ?? '--',
     windScale: h.windScale ?? '--',
   })) as HourlyForecast[]
+}
+
+/**
+ * 获取指定经纬度的天气预警。
+ * 接口：/weatheralert/v1/current/{lat}/{lon}
+ *
+ * 新接口使用经纬度路径参数（替代已弃用的 /v7/warning/now），
+ * 响应为 v2 格式（无 code 字段，由 metadata.zeroResult 标记无数据）。
+ *
+ * @param lat - 纬度（十进制，最多两位小数）
+ * @param lon - 经度（十进制，最多两位小数）
+ * @returns 天气预警列表，无预警时返回空数组
+ */
+export async function getWeatherWarnings(lat: string, lon: string): Promise<WeatherWarning[]> {
+  const { data } = await client.get<Record<string, unknown>>(
+    `/weatheralert/v1/current/${lat}/${lon}`
+  )
+
+  if (!isOkOrEmpty(data as unknown as ApiResponse)) {
+    throw new Error(apiErrorMessage((data as unknown as ApiResponse).code))
+  }
+
+  // v2 格式：无数据由 metadata.zeroResult 标记
+  const meta = (data.metadata as Record<string, unknown>) || {}
+  if (meta.zeroResult) return []
+
+  const alerts = (data.alerts as Record<string, unknown>[]) || []
+  return alerts.map((a) => {
+    const rawColor = (a.color as Record<string, unknown>) || {}
+    const colorCode = (rawColor.code as string) || ''
+    return {
+      id: (a.id as string) || '',
+      senderName: (a.senderName as string) || '',
+      issuedTime: (a.issuedTime as string) || '',
+      eventType: {
+        name: ((a.eventType as Record<string, string>)?.name) || '',
+        code: (a.eventType as Record<string, string>)?.code,
+      },
+      severity: (a.severity as string) || '',
+      // 归一化 color.code 首字母大写，兼容 WarningBanner 的大写 key 查找
+      color: {
+        code: colorCode.charAt(0).toUpperCase() + colorCode.slice(1),
+        red: rawColor.red as number,
+        green: rawColor.green as number,
+        blue: rawColor.blue as number,
+        alpha: rawColor.alpha as number,
+      },
+      headline: (a.headline as string) || '',
+      description: (a.description as string) || '',
+      instruction: (a.instruction as string) || '',
+      effectiveTime: (a.effectiveTime as string) || '',
+      onsetTime: (a.onsetTime as string) || '',
+      expireTime: (a.expireTime as string) || '',
+      icon: (a.icon as string) || '',
+      criteria: (a.criteria as string) || '',
+    }
+  })
 }
 
 /**

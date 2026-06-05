@@ -5,6 +5,7 @@ import {
   getNowWeather,
   get7dForecast,
   getHourlyForecast,
+  getWeatherWarnings,
   getLifeIndices,
   getAirQuality,
   getMinutelyPrecipitation,
@@ -19,6 +20,7 @@ import type {
   CityWeatherCache,
   StoredCityEntry,
   CitySearchResult,
+  WeatherWarning,
   LifeIndex,
   AirQualityData,
   MinutelyPrecipitation,
@@ -39,6 +41,8 @@ const STORAGE_ACTIVE_CITY = 'weather-active-city'
 
 /** 基础天气（实时 + 7 天 + 168 小时）— 30 分钟 */
 const TTL_BASE = 30 * 60 * 1000
+/** 天气预警 — 15 分钟 */
+const TTL_WARNINGS = 15 * 60 * 1000
 /** 生活指数 — 60 分钟 */
 const TTL_INDICES = 60 * 60 * 1000
 /** 空气质量 — 15 分钟 */
@@ -161,6 +165,7 @@ export const useWeatherStore = defineStore('weather', () => {
         currentWeather,
         forecast,
         hourlyForecast,
+        warnings,
         indices,
         aqi,
         minutely,
@@ -168,6 +173,12 @@ export const useWeatherStore = defineStore('weather', () => {
         getNowWeather(cityInfo.id),
         get7dForecast(cityInfo.id),
         getHourlyForecast(cityInfo.id),
+        safeFetch(
+          cityInfo.lat && cityInfo.lon
+            ? getWeatherWarnings(cityInfo.lat, cityInfo.lon)
+            : Promise.resolve([]),
+          [] as WeatherWarning[]
+        ),
         safeFetch(getLifeIndices(cityInfo.id), [] as LifeIndex[]),
         safeFetch(
           cityInfo.lat && cityInfo.lon
@@ -190,6 +201,8 @@ export const useWeatherStore = defineStore('weather', () => {
         forecast,
         hourlyForecast,
         lastFetchTime: now,
+        warnings,
+        warningsFetchTime: now,
         lifeIndices: indices,
         indicesFetchTime: now,
         airQuality: aqi,
@@ -271,6 +284,7 @@ export const useWeatherStore = defineStore('weather', () => {
 
     // 判断各端点是否过期
     const baseExpired = now - cache.lastFetchTime > TTL_BASE
+    const warningsExpired = !cache.warningsFetchTime || (now - cache.warningsFetchTime > TTL_WARNINGS)
     const indicesExpired = !cache.indicesFetchTime || (now - cache.indicesFetchTime > TTL_INDICES)
     const aqiExpired = !cache.aqiFetchTime || (now - cache.aqiFetchTime > TTL_AQI)
     const minutelyExpired = !cache.minutelyFetchTime || (now - cache.minutelyFetchTime > TTL_MINUTELY)
@@ -279,6 +293,7 @@ export const useWeatherStore = defineStore('weather', () => {
       // 并行获取：基础天气（如过期）+ 可选端点（如过期）
       const [
         baseResult,
+        warnings,
         indices,
         aqi,
         minutely,
@@ -289,6 +304,12 @@ export const useWeatherStore = defineStore('weather', () => {
               get7dForecast(locationId),
               getHourlyForecast(locationId),
             ])
+          : Promise.resolve(null),
+        warningsExpired && cache.cityInfo.lat && cache.cityInfo.lon
+          ? safeFetch(
+              getWeatherWarnings(cache.cityInfo.lat, cache.cityInfo.lon),
+              cache.warnings ?? []
+            )
           : Promise.resolve(null),
         indicesExpired
           ? safeFetch(getLifeIndices(locationId), cache.lifeIndices ?? [])
@@ -317,6 +338,10 @@ export const useWeatherStore = defineStore('weather', () => {
       }
 
       // 应用可选数据更新（仅在实际获取到新数据时更新）
+      if (warnings !== null) {
+        cache.warnings = warnings
+        cache.warningsFetchTime = now
+      }
       if (indices !== null) {
         cache.lifeIndices = indices
         cache.indicesFetchTime = now
@@ -431,6 +456,8 @@ export const useWeatherStore = defineStore('weather', () => {
       hourlyForecast: [],
       lastFetchTime: 0,
       // Phase 3 新字段：全部初始化为 null（未获取状态）
+      warnings: null,
+      warningsFetchTime: undefined,
       lifeIndices: null,
       indicesFetchTime: undefined,
       airQuality: null,

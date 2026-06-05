@@ -115,6 +115,10 @@ export interface CityWeatherCache {
   lastFetchTime: number
 
   // ---- Phase 3 新增 ----
+  /** 天气预警列表（15min TTL） */
+  warnings?: WeatherWarning[] | null
+  /** 预警数据拉取时间戳 */
+  warningsFetchTime?: number
   /** 生活指数列表（60min TTL） */
   lifeIndices?: LifeIndex[] | null
   /** 生活指数拉取时间戳 */
@@ -160,6 +164,35 @@ export interface CitySearchResult {
   country: string
   lat: string
   lon: string
+}
+
+// =============================================================================
+// 天气预警（来自 /weatheralert/v1/current/{lat}/{lon}）
+// =============================================================================
+
+export interface WeatherWarning {
+  id: string
+  senderName: string
+  issuedTime: string
+  eventType: { name: string; code?: string }
+  severity: string
+  color: {
+    code: string
+    red?: number
+    green?: number
+    blue?: number
+    alpha?: number
+  }
+  headline: string
+  description: string
+  instruction: string
+  effectiveTime: string
+  onsetTime: string
+  expireTime: string
+  /** 预警图标代码 (Phase 3.1) */
+  icon?: string
+  /** 预警触发标准 (Phase 3.1) */
+  criteria?: string
 }
 
 // =============================================================================

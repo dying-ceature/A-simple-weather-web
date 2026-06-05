@@ -3,13 +3,14 @@
  * App.vue — 根组件（Phase 3 布局重排）
  *
  * 自上而下内容顺序：
- *   1. CurrentWeather（实时天气）
- *   2. MinutelyRainChart（仅在有降水时显示）
- *   3. HourlyChart（168h 温度趋势）
- *   4. ForecastList（7 天预报，含日出日落）
- *   5. LifeIndices（生活指数）
- *   6. AirQualityCard（空气质量）
- *   7. TemperatureChart（7 天温度趋势）
+ *   1. WarningBanner（顶部预警横幅）
+ *   2. CurrentWeather（实时天气）
+ *   3. MinutelyRainChart（仅在有降水时显示）
+ *   4. HourlyChart（168h 温度趋势）
+ *   5. ForecastList（7 天预报，含日出日落）
+ *   6. LifeIndices（生活指数）
+ *   7. AirQualityCard（空气质量）
+ *   8. TemperatureChart（7 天温度趋势）
  */
 
 import { ref, watch, onMounted } from 'vue'
@@ -20,6 +21,7 @@ import { useThemeStore } from '@/stores/theme'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import CityTabs from '@/components/CityTabs.vue'
 import AddCityDialog from '@/components/AddCityDialog.vue'
+import WarningBanner from '@/components/WarningBanner.vue'
 import CurrentWeather from '@/components/CurrentWeather.vue'
 import MinutelyRainChart from '@/components/MinutelyRainChart.vue'
 import HourlyChart from '@/components/HourlyChart.vue'
@@ -119,37 +121,40 @@ onMounted(() => {
 
     <!-- ================================================================
          天气数据展示（活跃城市）
-         布局顺序：实时天气 → 降水 → 逐时 → 预报 → 指数 → AQI → 温度趋势
+         布局顺序：预警 → 实时天气 → 降水 → 逐时 → 预报 → 指数 → AQI → 温度趋势
          ================================================================ -->
     <main
       v-if="weatherStore.activeCity && weatherStore.activeCity.currentWeather && !weatherStore.loading"
       class="app-main"
     >
-      <!-- 1. 实时天气卡片 -->
+      <!-- 1. 天气预警横幅（最顶部，最醒目） -->
+      <WarningBanner :warnings="weatherStore.activeCity.warnings" />
+
+      <!-- 2. 实时天气卡片 -->
       <CurrentWeather
         :city-info="weatherStore.activeCity.cityInfo"
         :now-data="weatherStore.activeCity.currentWeather"
       />
 
-      <!-- 2. 分钟级降水图表（仅在有实际降水时显示） -->
+      <!-- 3. 分钟级降水图表（仅在有实际降水时显示） -->
       <MinutelyRainChart
         v-if="weatherStore.activeCity.minutelyPrecipitation"
         :minutely-data="weatherStore.activeCity.minutelyPrecipitation"
       />
 
-      <!-- 3. 168h 逐时温度趋势 -->
+      <!-- 4. 168h 逐时温度趋势 -->
       <HourlyChart :hourly-data="weatherStore.activeCity.hourlyForecast" />
 
-      <!-- 4. 7 天预报（含日出日落） -->
+      <!-- 5. 7 天预报（含日出日落） -->
       <ForecastList :daily-data="weatherStore.activeCity.forecast" />
 
-      <!-- 5. 生活指数 -->
+      <!-- 6. 生活指数 -->
       <LifeIndices :indices="weatherStore.activeCity.lifeIndices" />
 
-      <!-- 6. 空气质量 -->
+      <!-- 7. 空气质量 -->
       <AirQualityCard :aqi="weatherStore.activeCity.airQuality" />
 
-      <!-- 7. 7 天温度趋势图 -->
+      <!-- 8. 7 天温度趋势图 -->
       <TemperatureChart
         v-if="weatherStore.activeCity.forecast.length > 0"
         :daily-data="weatherStore.activeCity.forecast"
