@@ -384,27 +384,30 @@ export const useWeatherStore = defineStore('weather', () => {
 
         cityOrder.value = order.filter((id) => metaList.some((m) => m.id === id))
 
-        // 恢复活跃城市
-        if (storedActive && order.includes(storedActive)) {
+        // 批量并行刷新所有城市（确保 Tab 显示天气图标和温度）
+        const idsToRefresh = cityOrder.value.filter(
+          (id) => cities.value[id] && cities.value[id].lastFetchTime === 0
+        )
+
+        if (idsToRefresh.length > 0) {
+          loading.value = true
+          error.value = null
+          try {
+            await Promise.all(idsToRefresh.map((id) => refreshCity(id)))
+          } catch (e: unknown) {
+            // refreshCity 内部已 catch，这里仅兜底
+          } finally {
+            loading.value = false
+          }
+        }
+
+        // 恢复活跃城市（数据已由批量刷新获取，setActiveCity 中 refreshCity 命中 TTL 跳过）
+        if (storedActive && cityOrder.value.includes(storedActive)) {
           activeCityId.value = storedActive
           persistActiveCity()
-
-          // 使用 refreshCity 加载数据（自动按 TTL 处理）
-          const cache = cities.value[storedActive]
-          if (cache && cache.lastFetchTime === 0) {
-            loading.value = true
-            error.value = null
-            try {
-              await refreshCity(storedActive)
-            } catch (e: unknown) {
-              const msg = e instanceof Error ? e.message : '加载天气数据失败'
-              error.value = msg
-            } finally {
-              loading.value = false
-            }
-          }
-        } else if (order.length > 0) {
-          await setActiveCity(order[0])
+        } else if (cityOrder.value.length > 0) {
+          activeCityId.value = cityOrder.value[0]
+          persistActiveCity()
         }
       } else {
         // 首次使用，默认添加北京
