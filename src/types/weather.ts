@@ -73,6 +73,10 @@ export interface DailyForecast {
   windDirNight: string
   /** 夜间风力等级 */
   windScaleNight: string
+  /** 日出时间 HH:mm (Phase 3) */
+  sunrise: string
+  /** 日落时间 HH:mm (Phase 3) */
+  sunset: string
 }
 
 // =============================================================================
@@ -107,8 +111,22 @@ export interface CityWeatherCache {
   forecast: DailyForecast[]
   /** 168 小时逐时预报 */
   hourlyForecast: HourlyForecast[]
-  /** 上次拉取数据的时间戳 (Date.now()) */
+  /** 上次拉取基础天气数据的时间戳 (Date.now()) — 30min TTL */
   lastFetchTime: number
+
+  // ---- Phase 3 新增 ----
+  /** 生活指数列表（60min TTL） */
+  lifeIndices?: LifeIndex[] | null
+  /** 生活指数拉取时间戳 */
+  indicesFetchTime?: number
+  /** 空气质量数据（15min TTL） */
+  airQuality?: AirQualityData | null
+  /** 空气质量拉取时间戳 */
+  aqiFetchTime?: number
+  /** 分钟级降水数据（10min TTL） */
+  minutelyPrecipitation?: MinutelyPrecipitation | null
+  /** 降水数据拉取时间戳 */
+  minutelyFetchTime?: number
 }
 
 // =============================================================================
@@ -124,6 +142,10 @@ export interface StoredCityEntry {
   adm1: string
   /** 所属国家 */
   country: string
+  /** 纬度 (Phase 3 — 用于 AQI/降水 API) */
+  lat: string
+  /** 经度 (Phase 3 — 用于 AQI/降水 API) */
+  lon: string
 }
 
 // =============================================================================
@@ -136,6 +158,77 @@ export interface CitySearchResult {
   adm1: string
   adm2: string
   country: string
+  lat: string
+  lon: string
+}
+
+// =============================================================================
+// 生活指数（来自 /v7/indices/1d）
+// =============================================================================
+
+export interface LifeIndex {
+  date: string
+  type: string
+  name: string
+  level: string
+  category: string
+  text: string
+}
+
+// =============================================================================
+// 空气质量（来自 /airquality/v1/current/{lat}/{lon}）
+// =============================================================================
+
+export interface AirQualityIndex {
+  code: string
+  aqi: string
+  level: string
+  category: string
+  color: { red: number; green: number; blue: number; alpha: number }
+  primaryPollutant: string | null
+  health: { effect: string; advice: string }
+}
+
+export interface AirPollutant {
+  code: string
+  name: string
+  fullName: string
+  concentration: string
+  unit: string
+}
+
+export interface AirQualityData {
+  indexes: AirQualityIndex[]
+  pollutants: AirPollutant[]
+  stations: { name: string; id: string }[]
+  updateTime: string
+}
+
+// =============================================================================
+// 分钟级降水（来自 /v7/minutely/5m）
+// =============================================================================
+
+export interface MinutelyItem {
+  fxTime: string
+  precip: string
+  type: string
+}
+
+export interface MinutelyPrecipitation {
+  summary: string
+  minutely: MinutelyItem[]
+}
+
+// =============================================================================
+// 热门城市（来自 /geo/v2/city/top）
+// =============================================================================
+
+export interface TopCity {
+  name: string
+  id: string
+  adm1: string
+  adm2?: string
+  country?: string
   lat: string
   lon: string
 }

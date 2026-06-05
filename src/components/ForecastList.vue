@@ -20,6 +20,8 @@ interface FormattedDay extends DailyForecast {
   weekdayText: string
   iconDayUrl: string
   iconNightUrl: string
+  sunrise: string
+  sunset: string
 }
 
 /** 格式化后的预报列表 */
@@ -32,6 +34,8 @@ const formattedList = computed<FormattedDay[]>(() => {
     weekdayText: isToday(day.fxDate) ? '今天' : getWeekday(day.fxDate),
     iconDayUrl: getWeatherIconUrl(day.iconDay),
     iconNightUrl: getWeatherIconUrl(day.iconNight),
+    sunrise: day.sunrise || '--',
+    sunset: day.sunset || '--',
   }))
 })
 </script>
@@ -85,6 +89,12 @@ const formattedList = computed<FormattedDay[]>(() => {
           <!-- 风力风向（白天） -->
           <div class="fc-wind">
             {{ day.windDirDay || '--' }} {{ day.windScaleDay || '--' }} 级
+          </div>
+
+          <!-- 日出日落 -->
+          <div class="fc-sun">
+            <span class="fc-sun-item">🌅 {{ day.sunrise }}</span>
+            <span class="fc-sun-item">🌇 {{ day.sunset }}</span>
           </div>
         </div>
       </div>
@@ -180,6 +190,18 @@ const formattedList = computed<FormattedDay[]>(() => {
 
 .fc-wind {
   font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.fc-sun {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.fc-sun-item {
+  font-size: 10px;
   color: var(--color-text-muted);
 }
 

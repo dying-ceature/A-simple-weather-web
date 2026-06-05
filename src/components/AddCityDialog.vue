@@ -6,11 +6,11 @@
  * 支持搜索多个结果供用户选择。
  */
 
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useWeatherStore } from '@/stores/weather'
 import { searchCity as apiSearchList } from '@/api/weather'
 import { ElMessage } from 'element-plus'
-import type { CitySearchResult } from '@/types/weather'
+import type { CitySearchResult, TopCity } from '@/types/weather'
 
 // =============================================================================
 // Props & Emits
@@ -84,6 +84,26 @@ async function selectCity(result: CitySearchResult): Promise<void> {
   }
 }
 
+/** 热门城市快速添加 */
+async function selectHotCity(city: TopCity): Promise<void> {
+  addingCityId.value = city.id
+  try {
+    const locationId = await weatherStore.addCity(city.name)
+    if (locationId) {
+      ElMessage.success(`已添加 ${city.name}`)
+      emit('cityAdded', locationId)
+    } else {
+      ElMessage.warning(`城市"${city.name}"已在列表中`)
+    }
+    close()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '添加失败'
+    ElMessage.error(msg)
+  } finally {
+    addingCityId.value = null
+  }
+}
+
 /** 弹窗 visible 变化处理 */
 function handleVisibleChange(val: boolean): void {
   if (!val) close()
@@ -105,6 +125,13 @@ watch(() => props.visible, (val) => {
     searched.value = false
   }
 })
+
+// 首次挂载时加载热门城市（全局调用一次）
+onMounted(() => {
+  if (weatherStore.hotCities.length === 0) {
+    weatherStore.fetchHotCities()
+  }
+})
 </script>
 
 <template>
@@ -116,6 +143,20 @@ watch(() => props.visible, (val) => {
     @update:model-value="handleVisibleChange"
   >
     <div class="add-city-dialog">
+      <!-- 热门城市快捷标签 -->
+      <div v-if="weatherStore.hotCities.length > 0" class="hot-cities">
+        <span class="hot-cities-label">热门城市：</span>
+        <el-tag
+          v-for="city in weatherStore.hotCities"
+          :key="city.id"
+          class="hot-city-tag"
+          size="small"
+          @click="selectHotCity(city)"
+        >
+          {{ city.name }}
+        </el-tag>
+      </div>
+
       <!-- 搜索输入 -->
       <el-input
         v-model="keyword"
@@ -175,6 +216,30 @@ watch(() => props.visible, (val) => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 热门城市 */
+.hot-cities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hot-cities-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.hot-city-tag {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.hot-city-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
 }
 
 .search-results {

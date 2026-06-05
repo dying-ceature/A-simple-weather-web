@@ -60,3 +60,4 @@ export function formatDateShort(dateStr: string | null | undefined): string {
   if (parts.length !== 3) return dateStr
   return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`
 }
+

@@ -5,6 +5,10 @@ import {
   getNowWeather,
   get7dForecast,
   getHourlyForecast,
+  getLifeIndices,
+  getAirQuality,
+  getMinutelyPrecipitation,
+  getTopCities,
   getWeatherIconUrl,
 } from '@/api/weather'
 import type {
@@ -15,6 +19,10 @@ import type {
   CityWeatherCache,
   StoredCityEntry,
   CitySearchResult,
+  LifeIndex,
+  AirQualityData,
+  MinutelyPrecipitation,
+  TopCity,
 } from '@/types/weather'
 
 // =============================================================================
@@ -25,21 +33,39 @@ const STORAGE_CITY_ORDER = 'weather-city-order'
 const STORAGE_CITIES_META = 'weather-cities-meta'
 const STORAGE_ACTIVE_CITY = 'weather-active-city'
 
-/** 天气缓存有效期（30 分钟） */
-const CACHE_TTL_MS = 30 * 60 * 1000
+// =============================================================================
+// Cache TTLs（毫秒）
+// =============================================================================
+
+/** 基础天气（实时 + 7 天 + 168 小时）— 30 分钟 */
+const TTL_BASE = 30 * 60 * 1000
+/** 生活指数 — 60 分钟 */
+const TTL_INDICES = 60 * 60 * 1000
+/** 空气质量 — 15 分钟 */
+const TTL_AQI = 15 * 60 * 1000
+/** 分钟级降水 — 10 分钟 */
+const TTL_MINUTELY = 10 * 60 * 1000
 
 // =============================================================================
-// Weather Pinia Store
+// 内部工具
 // =============================================================================
 
 /**
- * 天气 Pinia Store（多城市支持）
- *
- * 核心数据结构变化（相比 Phase 1）：
- *   单城市 ref → 多城市 Map + 有序数组 + 活跃城市指针
- *
- * 替换原 src/composables/useWeather.js。
+ * 安全获取：捕获异常并返回 fallback，不抛出错误。
+ * 用于可选 API（预警/指数/AQI/降水），失败时不影响核心天气数据。
  */
+async function safeFetch<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise
+  } catch {
+    return fallback
+  }
+}
+
+// =============================================================================
+// Weather Pinia Store（Phase 3 — 多端点 + 分 TTL + 7 路并行）
+// =============================================================================
+
 export const useWeatherStore = defineStore('weather', () => {
   // ---------------------------------------------------------------------------
   // State
@@ -59,6 +85,14 @@ export const useWeatherStore = defineStore('weather', () => {
 
   /** 全局错误信息 */
   const error = ref<string | null>(null)
+
+  // ---- Phase 3 新增 State ----
+
+  /** 热门城市列表（全局，非按城市） */
+  const hotCities = ref<TopCity[]>([])
+
+  /** 热门城市加载状态 */
+  const hotCitiesLoading = ref(false)
 
   // ---------------------------------------------------------------------------
   // Getters
@@ -82,14 +116,21 @@ export const useWeatherStore = defineStore('weather', () => {
 
   /**
    * 有序的城市元信息列表（用于持久化和 Tab 展示）。
-   * 即使某个城市的天气数据尚未加载，只要在 cityOrder 中就会尝试从缓存读取。
+   * Phase 3：包含 lat/lon 以支持从 localStorage 恢复后调用 AQI/降水 API。
    */
   const cityMetaList = computed<StoredCityEntry[]>(() => {
     return cityOrder.value
       .filter((id) => cities.value[id])
       .map((id) => {
         const c = cities.value[id].cityInfo
-        return { id: c.id, name: c.name, adm1: c.adm1, country: c.country }
+        return {
+          id: c.id,
+          name: c.name,
+          adm1: c.adm1,
+          country: c.country,
+          lat: c.lat,
+          lon: c.lon,
+        }
       })
   })
 
@@ -99,10 +140,7 @@ export const useWeatherStore = defineStore('weather', () => {
 
   /**
    * 添加城市到"我的城市"列表。
-   * 流程：搜索 → 获取天气 → 缓存 → 加入有序列表 → 设为活跃 → 持久化。
-   *
-   * @param cityName - 城市名称关键字
-   * @returns 添加成功后的 locationId；如果城市已存在则返回 null
+   * Phase 3：7 路并行获取（3 核心 + 4 可选），可选 API 失败不影响核心数据。
    */
   async function addCity(cityName: string): Promise<string | null> {
     error.value = null
@@ -113,25 +151,51 @@ export const useWeatherStore = defineStore('weather', () => {
 
       // 2. 检查是否已存在
       if (cityOrder.value.includes(cityInfo.id)) {
-        // 已存在 → 直接切换到该城市
         setActiveCity(cityInfo.id)
         return null
       }
 
-      // 3. 并行拉取三种天气数据
-      const [currentWeather, forecast, hourlyForecast] = await Promise.all([
+      // 3. 7 路并行获取（核心 3 路 throw on fail，可选 4 路 safeFetch）
+      const now = Date.now()
+      const [
+        currentWeather,
+        forecast,
+        hourlyForecast,
+        indices,
+        aqi,
+        minutely,
+      ] = await Promise.all([
         getNowWeather(cityInfo.id),
         get7dForecast(cityInfo.id),
         getHourlyForecast(cityInfo.id),
+        safeFetch(getLifeIndices(cityInfo.id), [] as LifeIndex[]),
+        safeFetch(
+          cityInfo.lat && cityInfo.lon
+            ? getAirQuality(cityInfo.lat, cityInfo.lon)
+            : Promise.resolve(null),
+          null as AirQualityData | null
+        ),
+        safeFetch(
+          cityInfo.lon && cityInfo.lat
+            ? getMinutelyPrecipitation(cityInfo.lon, cityInfo.lat)
+            : Promise.resolve(null),
+          null as MinutelyPrecipitation | null
+        ),
       ])
 
-      // 4. 存入缓存
+      // 4. 存入缓存（含分端点 fetchTime）
       cities.value[cityInfo.id] = {
         cityInfo,
         currentWeather,
         forecast,
         hourlyForecast,
-        lastFetchTime: Date.now(),
+        lastFetchTime: now,
+        lifeIndices: indices,
+        indicesFetchTime: now,
+        airQuality: aqi,
+        aqiFetchTime: now,
+        minutelyPrecipitation: minutely,
+        minutelyFetchTime: now,
       }
 
       // 5. 加入有序列表
@@ -152,25 +216,17 @@ export const useWeatherStore = defineStore('weather', () => {
     }
   }
 
-  /**
-   * 从"我的城市"列表中删除指定城市。
-   *
-   * @param locationId - 要删除的城市 locationId
-   */
+  /** 从"我的城市"列表中删除指定城市 */
   function removeCity(locationId: string): void {
-    // 1. 从缓存中删除
     delete cities.value[locationId]
 
-    // 2. 从有序列表中移除
     const index = cityOrder.value.indexOf(locationId)
     if (index !== -1) {
       cityOrder.value.splice(index, 1)
     }
 
-    // 3. 如果删除的是当前活跃城市，切换到下一个（或置空）
     if (activeCityId.value === locationId) {
       if (cityOrder.value.length > 0) {
-        // 优先切换到被删除城市的邻居（靠近的）
         const newIndex = Math.min(index, cityOrder.value.length - 1)
         activeCityId.value = cityOrder.value[newIndex]
       } else {
@@ -179,17 +235,11 @@ export const useWeatherStore = defineStore('weather', () => {
       persistActiveCity()
     }
 
-    // 4. 持久化
     persistCityList()
   }
 
-  /**
-   * 重新排序城市列表（拖拽后调用）。
-   *
-   * @param newOrder - 新的 locationId 顺序数组
-   */
+  /** 重新排序城市列表（拖拽后调用） */
   function reorderCities(newOrder: string[]): void {
-    // 验证：新顺序必须包含所有已有城市
     if (newOrder.length !== cityOrder.value.length) return
     cityOrder.value = newOrder
     persistCityList()
@@ -197,9 +247,7 @@ export const useWeatherStore = defineStore('weather', () => {
 
   /**
    * 设置当前活跃城市。
-   * 如果该城市缓存过期（>30min），自动刷新天气数据。
-   *
-   * @param locationId - 目标城市 locationId
+   * Phase 3：按分端点 TTL 条件刷新。
    */
   async function setActiveCity(locationId: string): Promise<void> {
     if (!cities.value[locationId]) return
@@ -207,44 +255,90 @@ export const useWeatherStore = defineStore('weather', () => {
     activeCityId.value = locationId
     persistActiveCity()
 
-    // 如果缓存过期，静默刷新
-    const cache = cities.value[locationId]
-    if (Date.now() - cache.lastFetchTime > CACHE_TTL_MS) {
-      await refreshCity(locationId)
-    }
+    // 按 TTL 条件刷新
+    await refreshCity(locationId)
   }
 
   /**
    * 刷新指定城市的天气数据。
-   *
-   * @param locationId - 目标城市 locationId
+   * Phase 3：按分端点 TTL 独立判断是否刷新，safeFetch 保护可选 API。
    */
   async function refreshCity(locationId: string): Promise<void> {
-    if (!cities.value[locationId]) return
+    const cache = cities.value[locationId]
+    if (!cache) return
+
+    const now = Date.now()
+
+    // 判断各端点是否过期
+    const baseExpired = now - cache.lastFetchTime > TTL_BASE
+    const indicesExpired = !cache.indicesFetchTime || (now - cache.indicesFetchTime > TTL_INDICES)
+    const aqiExpired = !cache.aqiFetchTime || (now - cache.aqiFetchTime > TTL_AQI)
+    const minutelyExpired = !cache.minutelyFetchTime || (now - cache.minutelyFetchTime > TTL_MINUTELY)
 
     try {
-      const [currentWeather, forecast, hourlyForecast] = await Promise.all([
-        getNowWeather(locationId),
-        get7dForecast(locationId),
-        getHourlyForecast(locationId),
+      // 并行获取：基础天气（如过期）+ 可选端点（如过期）
+      const [
+        baseResult,
+        indices,
+        aqi,
+        minutely,
+      ] = await Promise.all([
+        baseExpired
+          ? Promise.all([
+              getNowWeather(locationId),
+              get7dForecast(locationId),
+              getHourlyForecast(locationId),
+            ])
+          : Promise.resolve(null),
+        indicesExpired
+          ? safeFetch(getLifeIndices(locationId), cache.lifeIndices ?? [])
+          : Promise.resolve(null),
+        aqiExpired && cache.cityInfo.lat && cache.cityInfo.lon
+          ? safeFetch(
+              getAirQuality(cache.cityInfo.lat, cache.cityInfo.lon),
+              cache.airQuality ?? null
+            )
+          : Promise.resolve(null),
+        minutelyExpired && cache.cityInfo.lon && cache.cityInfo.lat
+          ? safeFetch(
+              getMinutelyPrecipitation(cache.cityInfo.lon, cache.cityInfo.lat),
+              cache.minutelyPrecipitation ?? null
+            )
+          : Promise.resolve(null),
       ])
 
-      cities.value[locationId].currentWeather = currentWeather
-      cities.value[locationId].forecast = forecast
-      cities.value[locationId].hourlyForecast = hourlyForecast
-      cities.value[locationId].lastFetchTime = Date.now()
+      // 应用基础天气更新
+      if (baseResult) {
+        const [cw, fc, hf] = baseResult
+        cache.currentWeather = cw
+        cache.forecast = fc
+        cache.hourlyForecast = hf
+        cache.lastFetchTime = now
+      }
+
+      // 应用可选数据更新（仅在实际获取到新数据时更新）
+      if (indices !== null) {
+        cache.lifeIndices = indices
+        cache.indicesFetchTime = now
+      }
+      if (aqi !== null) {
+        cache.airQuality = aqi
+        cache.aqiFetchTime = now
+      }
+      if (minutely !== null) {
+        cache.minutelyPrecipitation = minutely
+        cache.minutelyFetchTime = now
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '刷新天气数据失败'
       error.value = msg
-      // 不抛出错误——使用旧的缓存数据
+      // 不抛出——使用旧的缓存数据
     }
   }
 
   /**
    * 从 localStorage 恢复城市列表。
-   * 应在 App.vue onMounted 中调用。
-   * - 恢复成功 → 自动拉取活跃城市天气数据
-   * - 从未使用过 → 默认添加"北京"
+   * Phase 3：恢复后使用 refreshCity（含 7 路并行 + 分端点 TTL）。
    */
   async function initFromStorage(): Promise<void> {
     try {
@@ -256,7 +350,7 @@ export const useWeatherStore = defineStore('weather', () => {
         const order: string[] = JSON.parse(storedOrder)
         const metaList: StoredCityEntry[] = JSON.parse(storedMeta)
 
-        // 重建城市缓存（先用空壳占位，后续按需加载）
+        // 重建城市缓存（空壳占位）
         for (const meta of metaList) {
           if (!cities.value[meta.id]) {
             cities.value[meta.id] = createEmptyCache(meta)
@@ -267,22 +361,16 @@ export const useWeatherStore = defineStore('weather', () => {
 
         // 恢复活跃城市
         if (storedActive && order.includes(storedActive)) {
-          await setActiveCity(storedActive)
-          // 如果缓存为空壳，加载数据
+          activeCityId.value = storedActive
+          persistActiveCity()
+
+          // 使用 refreshCity 加载数据（自动按 TTL 处理）
           const cache = cities.value[storedActive]
           if (cache && cache.lastFetchTime === 0) {
             loading.value = true
             error.value = null
             try {
-              const [currentWeather, forecast, hourlyForecast] = await Promise.all([
-                getNowWeather(storedActive),
-                get7dForecast(storedActive),
-                getHourlyForecast(storedActive),
-              ])
-              cache.currentWeather = currentWeather
-              cache.forecast = forecast
-              cache.hourlyForecast = hourlyForecast
-              cache.lastFetchTime = Date.now()
+              await refreshCity(storedActive)
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : '加载天气数据失败'
               error.value = msg
@@ -303,22 +391,30 @@ export const useWeatherStore = defineStore('weather', () => {
     }
   }
 
-  /**
-   * 搜索城市（不添加，仅返回结果列表）
-   * 用于 AddCityDialog 中的即时搜索。
-   *
-   * @param keyword - 搜索关键字
-   * @returns 城市搜索结果列表
-   */
+  /** 搜索城市（不添加，仅返回结果列表），用于 AddCityDialog */
   async function searchCities(keyword: string): Promise<CitySearchResult[]> {
     return await apiSearchCity(keyword, true)
+  }
+
+  // ---- Phase 3 新增 Actions ----
+
+  /** 获取热门城市列表（非关键，失败静默忽略） */
+  async function fetchHotCities(): Promise<void> {
+    hotCitiesLoading.value = true
+    try {
+      hotCities.value = await getTopCities()
+    } catch {
+      // 热门城市非关键，静默忽略
+    } finally {
+      hotCitiesLoading.value = false
+    }
   }
 
   // ---------------------------------------------------------------------------
   // 内部方法
   // ---------------------------------------------------------------------------
 
-  /** 创建一个空的天气缓存壳（用于从 localStorage 恢复） */
+  /** 创建一个空的天气缓存壳（Phase 3：含 lat/lon + 新字段初始值） */
   function createEmptyCache(meta: StoredCityEntry): CityWeatherCache {
     return {
       cityInfo: {
@@ -327,13 +423,20 @@ export const useWeatherStore = defineStore('weather', () => {
         adm1: meta.adm1,
         adm2: '',
         country: meta.country,
-        lat: '',
-        lon: '',
+        lat: meta.lat || '',
+        lon: meta.lon || '',
       },
       currentWeather: null,
       forecast: [],
       hourlyForecast: [],
-      lastFetchTime: 0, // 0 表示从未加载
+      lastFetchTime: 0,
+      // Phase 3 新字段：全部初始化为 null（未获取状态）
+      lifeIndices: null,
+      indicesFetchTime: undefined,
+      airQuality: null,
+      aqiFetchTime: undefined,
+      minutelyPrecipitation: null,
+      minutelyFetchTime: undefined,
     }
   }
 
@@ -359,6 +462,8 @@ export const useWeatherStore = defineStore('weather', () => {
     activeCityId,
     loading,
     error,
+    hotCities,
+    hotCitiesLoading,
     // Getters
     activeCity,
     cityCount,
@@ -372,5 +477,6 @@ export const useWeatherStore = defineStore('weather', () => {
     refreshCity,
     initFromStorage,
     searchCities,
+    fetchHotCities,
   }
 })
